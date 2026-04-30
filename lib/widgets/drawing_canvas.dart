@@ -37,6 +37,14 @@ class DrawingCanvasState extends State<DrawingCanvas> {
     return allStrokes;
   }
 
+  void loadStrokes(List<StrokeData> fetchedStrokes) {
+    setState(() {
+      _strokes.clear(); // 기존에 그려진 그림을 싹 지우고
+      _currentStrokePoints.clear();
+      _strokes.addAll(fetchedStrokes); // 서버에서 온 그림으로 덮어씁니다!
+    });
+  }
+
   // --- 터치 및 펜 인식 이벤트 (아이패드 맞춤형) ---
 
   void _onPointerDown(PointerDownEvent event) {
@@ -114,47 +122,57 @@ class DrawingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    Paint paint = Paint()
       ..color = Colors.black
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round // 끝을 둥글게
+      ..strokeJoin = StrokeJoin.round // 꺾이는 부분도 둥글게
+      ..strokeWidth = 4.0 // 선 두께 (원하시는 대로 조절)
       ..style = PaintingStyle.stroke;
 
-    // 1. 이미 완료된 획 렌더링
+    // 1. 이미 완성된 획들 그리기
     for (var stroke in strokes) {
-      _drawStroke(canvas, stroke.points, paint);
+      _drawSmoothCurve(canvas, stroke.points, paint);
     }
 
-    // 2. 현재 펜이 움직이고 있는 획 실시간 렌더링
+    // 2. 지금 실시간으로 그리고 있는 획 그리기
     if (currentStrokePoints.isNotEmpty) {
-      _drawStroke(canvas, currentStrokePoints, paint);
+      _drawSmoothCurve(canvas, currentStrokePoints, paint);
     }
   }
 
-  void _drawStroke(Canvas canvas, List<PointData> points, Paint paint) {
+  // 🚀 부드러운 곡선을 만들어주는 핵심 마법 함수
+  void _drawSmoothCurve(Canvas canvas, List<PointData> points, Paint paint) {
     if (points.isEmpty) return;
-    
-    // 점을 하나만 '콕' 찍었을 경우
+
+    Path path = Path();
+    path.moveTo(points.first.x, points.first.y);
+
     if (points.length == 1) {
-      paint.strokeWidth = (points.first.pressure * 5) + 2; 
-      canvas.drawPoints(PointMode.points, [Offset(points.first.x, points.first.y)], paint);
-      return;
+      // 점이 하나면 그냥 점을 하나 찍습니다.
+      path.lineTo(points.first.x, points.first.y);
+    } else {
+      // 점이 여러 개면 베지어 곡선으로 이어줍니다.
+      for (int i = 0; i < points.length - 1; i++) {
+        final currentPoint = points[i];
+        final nextPoint = points[i + 1];
+
+        // 두 점의 정확히 중간 지점을 계산합니다.
+        final midPointX = (currentPoint.x + nextPoint.x) / 2;
+        final midPointY = (currentPoint.y + nextPoint.y) / 2;
+
+        // 현재 점을 제어점(자석)으로, 중간 지점을 도착점으로 삼아 둥글게 깎아 그립니다.
+        path.quadraticBezierTo(
+          currentPoint.x, currentPoint.y, 
+          midPointX, midPointY
+        );
+      }
+      // 마지막 꼬리 부분은 끝점까지 확실하게 이어줍니다.
+      path.lineTo(points.last.x, points.last.y);
     }
 
-    // 선 그리기 (필압에 따라 선의 굵기가 미세하게 변함)
-    for (int i = 0; i < points.length - 1; i++) {
-      final p1 = points[i];
-      final p2 = points[i + 1];
-
-      // 기본 굵기(2)에 필압 가중치를 더해줍니다. 마우스/손가락일 경우 기본 굵기로 그려집니다.
-      paint.strokeWidth = (p1.pressure > 0 ? p1.pressure * 5 : 3) + 2;
-
-      canvas.drawLine(Offset(p1.x, p1.y), Offset(p2.x, p2.y), paint);
-    }
+    canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant DrawingPainter oldDelegate) {
-    return true; // 터치할 때마다 즉시 갱신되어야 하므로 true
-  }
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

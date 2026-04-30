@@ -42,10 +42,19 @@ class PointData {
   PointData({required this.x, required this.y, required this.pressure});
 
   Map<String, dynamic> toJson() => {
-    'x': double.parse(x.toStringAsFixed(4)), // 소수점 4자리까지 제한 (용량 최적화)
+    'x': double.parse(x.toStringAsFixed(4)),
     'y': double.parse(y.toStringAsFixed(4)),
     'p': double.parse(pressure.toStringAsFixed(4)),
   };
+
+  // [추가됨] 서버에서 온 JSON을 다시 PointData 객체로 변환
+  factory PointData.fromJson(Map<String, dynamic> json) {
+    return PointData(
+      x: (json['x'] as num).toDouble(),
+      y: (json['y'] as num).toDouble(),
+      pressure: (json['p'] as num).toDouble(), // 백엔드에는 'p'로 저장됨
+    );
+  }
 }
 
 class StrokeData {
@@ -55,12 +64,18 @@ class StrokeData {
   Map<String, dynamic> toJson() => {
     'points': points.map((p) => p.toJson()).toList(),
   };
+
+  // [추가됨] 서버에서 온 JSON을 다시 StrokeData 객체로 변환
+  factory StrokeData.fromJson(Map<String, dynamic> json) {
+    var pointsJson = json['points'] as List;
+    List<PointData> pointsList = pointsJson.map((point) => PointData.fromJson(point)).toList();
+    return StrokeData(points: pointsList);
+  }
 }
 
-// 기존 PointData, StrokeData 아래에 추가
 class HandwritingRequest {
-  final String charName;       // 어떤 글자인지 (예: "가")
-  final List<StrokeData> strokes; // 여러 개의 획들
+  final String charName;
+  final List<StrokeData> strokes;
 
   HandwritingRequest({required this.charName, required this.strokes});
 

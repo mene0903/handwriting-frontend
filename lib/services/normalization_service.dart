@@ -42,15 +42,13 @@ class NormalizationService {
 }
 */
 
-import 'dart:convert';
-import '../models/handwriting_model.dart'; // PointData, StrokeData가 있는 곳
+import '../models/handwriting_model.dart';
 
 class NormalizationService {
-  // 파라미터를 List<StrokeData>로 변경하여 모델과 일치시킴
-  static String processAndToJson(String label, List<StrokeData> strokes) {
-    if (strokes.isEmpty) return "";
+  // 반환 타입을 String에서 List<StrokeData>로 변경
+  static List<StrokeData> normalizeStrokes(List<StrokeData> strokes) {
+    if (strokes.isEmpty) return [];
 
-    // 1. 정규화를 위한 전체 범위(min/max) 찾기
     double minX = double.infinity;
     double maxX = double.negativeInfinity;
     double minY = double.infinity;
@@ -68,23 +66,19 @@ class NormalizationService {
     double width = (maxX - minX) == 0 ? 1 : (maxX - minX);
     double height = (maxY - minY) == 0 ? 1 : (maxY - minY);
 
-    // 2. 정규화 적용된 새로운 Stroke 리스트 생성
-    List<Map<String, dynamic>> normalizedStrokes = strokes.map((stroke) {
-      return {
-        'points': stroke.points.map((p) => {
-          'x': double.parse(((p.x - minX) / width).toStringAsFixed(4)),
-          'y': double.parse(((p.y - minY) / height).toStringAsFixed(4)),
-          'p': double.parse(p.pressure.toStringAsFixed(4)),
-        }).toList()
-      };
+    // 정규화된 좌표를 가진 새로운 StrokeData 객체 리스트 생성
+    List<StrokeData> normalizedStrokes = strokes.map((stroke) {
+      List<PointData> normalizedPoints = stroke.points.map((p) {
+        return PointData(
+          x: (p.x - minX) / width,
+          y: (p.y - minY) / height,
+          pressure: p.pressure, // 필압은 원본 유지
+        );
+      }).toList();
+      
+      return StrokeData(points: normalizedPoints);
     }).toList();
 
-    // 3. 최종 JSON 생성
-    Map<String, dynamic> finalData = {
-      'label': label,
-      'strokes': normalizedStrokes,
-    };
-
-    return jsonEncode(finalData);
+    return normalizedStrokes;
   }
 }

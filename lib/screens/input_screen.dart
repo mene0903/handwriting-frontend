@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:handwriting_front/http/api_service.dart';
 import '../widgets/drawing_canvas.dart';
 import '../models/handwriting_model.dart';
 import '../services/normalization_service.dart';
@@ -11,102 +12,157 @@ class InputScreen extends StatefulWidget {
 }
 
 class _InputScreenState extends State<InputScreen> {
-  final GlobalKey<DrawingCanvasState> _canvasKey = GlobalKey<DrawingCanvasState>();
+  final GlobalKey<DrawingCanvasState> _originalCanvasKey = GlobalKey<DrawingCanvasState>();
+  final GlobalKey<DrawingCanvasState> _serverCanvasKey = GlobalKey<DrawingCanvasState>();
+  
+  // 💡 캔버스 크기를 말씀하신 대로 여유로운 150으로 확 줄였습니다!
+  // 나중에 더 키우거나 줄이고 싶으시면 이 숫자만 180, 200 등으로 바꾸시면 됩니다.
+  final double canvasSize = 250.0;
 
-  // 💡 중복을 줄이기 위한 공통 팝업 함수
-  void _showJsonDialog(String title, String jsonString) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 600,
-            height: 500,
-            child: SingleChildScrollView(
-              child: SelectableText(jsonString),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context), 
-              child: const Text('닫기')
-            )
-          ],
+  void _saveToServer() async {
+    final strokes = _originalCanvasKey.currentState?.getValidPoints();
+    if (strokes != null && strokes.isNotEmpty) {
+      List<StrokeData> normalizedStrokes = NormalizationService.normalizeStrokes(strokes);
+      bool isSuccess = await ApiService.saveHandwriting("가", normalizedStrokes);
+
+      if (isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🎉 서버(DB)에 성공적으로 저장되었습니다!')),
         );
-      },
-    );
-  }
-
-  // 1. 원본 데이터 (정규화 전) 보여주기
-  void _showRawData() {
-    final strokes = _canvasKey.currentState?.getValidPoints();
-    if (strokes != null && strokes.isNotEmpty) {
-      final request = HandwritingRequest(charName: "가", strokes: strokes);
-      const encoder = JsonEncoder.withIndent('  ');
-      String rawJson = encoder.convert(request.toJson());
-      
-      _showJsonDialog('원본 JSON 데이터 (정규화 전)', rawJson);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ 저장 실패... 서버 상태를 확인해주세요.')),
+        );
+      }
     } else {
       _showEmptyWarning();
     }
   }
 
-  // 2. 정규화 데이터 (서버 전송용) 보여주기
-  void _showNormalizedData() {
-    final strokes = _canvasKey.currentState?.getValidPoints();
-    if (strokes != null && strokes.isNotEmpty) {
-      // NormalizationService에서 만들어준 JSON 문자열 가져오기
-      String normalizedJsonString = NormalizationService.processAndToJson("가", strokes);
-      
-      // 보기 예쁘게 들여쓰기(Indent)를 넣기 위해 한 번 파싱했다가 다시 인코딩
-      final Map<String, dynamic> parsedJson = jsonDecode(normalizedJsonString);
-      const encoder = JsonEncoder.withIndent('  ');
-      String prettyNormalizedJson = encoder.convert(parsedJson);
+// 🚀 서버 불러오기 & 양쪽 캔버스 완벽 보정 비교
+  void _loadFromServer() async {
+    List<StrokeData>? fetchedStrokes = await ApiService.getLatestHandwriting();
 
-      _showJsonDialog('정규화 JSON 데이터 (서버 전송용)', prettyNormalizedJson);
+    if (fetchedStrokes != null && fetchedStrokes.isNotEmpty) {
+      // 💡 1. 사각형의 딱 절반 크기(50%)로 배율 설정, 중앙 여백(Offset) 계산
+      final double targetScale = canvasSize * 0.5; 
+      final double offset = (canvasSize - targetScale) / 2;
+
+      // --- [오른쪽: 서버 데이터 렌더링] ---
+      List<StrokeData> denormalizedServer = fetchedStrokes.map((stroke) {
+        return StrokeData(
+          points: stroke.points.map((p) => PointData(
+            x: (p.x * targetScale) + offset, 
+            y: (p.y * targetScale) + offset, 
+            pressure: p.pressure,
+          )).toList(),
+        );
+      }).toList();
+      _serverCanvasKey.currentState?.loadStrokes(denormalizedServer);
+
+      // --- [왼쪽: 원본 데이터 보정 렌더링] ---
+      final rawStrokes = _originalCanvasKey.currentState?.getValidPoints();
+      // 왼쪽에 사용자가 그린 그림이 남아있다면 똑같이 보정해줍니다.
+      if (rawStrokes != null && rawStrokes.isNotEmpty) {
+        // 사용자의 날것(Raw) 데이터를 서버와 똑같은 조건(0.0~1.0)으로 먼저 정규화
+        List<StrokeData> normalizedOriginal = NormalizationService.normalizeStrokes(rawStrokes);
+        
+        // 정규화된 데이터를 50% 스케일 + 정중앙으로 역정규화
+        List<StrokeData> correctedOriginal = normalizedOriginal.map((stroke) {
+          return StrokeData(
+            points: stroke.points.map((p) => PointData(
+              x: (p.x * targetScale) + offset, 
+              y: (p.y * targetScale) + offset, 
+              pressure: p.pressure,
+            )).toList(),
+          );
+        }).toList();
+        
+        // 원본 캔버스(왼쪽)를 보정된 데이터로 덮어쓰기!
+        _originalCanvasKey.currentState?.loadStrokes(correctedOriginal);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('📥 양쪽 모두 50% 정중앙 보정 완료! 완벽한 비교가 가능합니다.')),
+      );
     } else {
-      _showEmptyWarning();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('❌ 불러올 데이터가 없거나 실패했습니다.')),
+      );
     }
   }
 
-  void _showEmptyWarning() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('먼저 글자를 입력해주세요.')),
-    );
-  }
+  void _showEmptyWarning() => ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('먼저 왼쪽 캔버스에 글자를 입력해주세요.')),
+  );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('데이터 확인 테스트')),
-      body: Center(
+      appBar: AppBar(title: const Text('원본 vs 서버 데이터 확실한 비교')),
+      body: SingleChildScrollView(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            DrawingCanvas(key: _canvasKey, size: 400),
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
+            // 💡 작아진 캔버스 두 개를 나란히 배치
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 왼쪽: 원본 영역
+                Column(
+                  children: [
+                    const Text("[ 원본 ]", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 10),
+                    DrawingCanvas(key: _originalCanvasKey, size: canvasSize),
+                  ],
+                ),
+                const SizedBox(width: 30), // 캔버스가 작아진 만큼 가운데 여백을 살짝 늘렸습니다.
+                // 오른쪽: 서버 결과 영역
+                Column(
+                  children: [
+                    const Text("[ 서버 데이터 ]", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue)),
+                    const SizedBox(height: 10),
+                    DrawingCanvas(key: _serverCanvasKey, size: canvasSize),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 50),
+            // 하단 제어 버튼들
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ElevatedButton(
-                  onPressed: () => _canvasKey.currentState?.clearPoints(),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                  child: const Text('초기화', style: TextStyle(color: Colors.white)),
+                  onPressed: () {
+                    _originalCanvasKey.currentState?.clearPoints();
+                    _serverCanvasKey.currentState?.clearPoints();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey,
+                    minimumSize: const Size(100, 45),
+                  ),
+                  child: const Text('둘 다 초기화', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(width: 10),
                 ElevatedButton(
-                  onPressed: _showRawData, 
-                  child: const Text('원본 JSON'),
+                  onPressed: _saveToServer,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    minimumSize: const Size(100, 45),
+                  ),
+                  child: const Text('서버에 저장', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(width: 10),
                 ElevatedButton(
-                  onPressed: _showNormalizedData, 
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                  child: const Text('정규화 JSON', style: TextStyle(color: Colors.white)),
+                  onPressed: _loadFromServer,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    minimumSize: const Size(100, 45),
+                  ),
+                  child: const Text('불러와서 비교', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),

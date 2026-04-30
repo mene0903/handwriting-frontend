@@ -1,15 +1,16 @@
 import 'dart:convert';
+import 'package:handwriting_front/core/api_config.dart';
 import 'package:http/http.dart' as http;
+import '../models/handwriting_model.dart'; // 모델 import
 
 class ApiService {
-  // 본인의 PC IP 주소 또는 localhost를 입력하세요. (에뮬레이터는 10.0.2.2)
-  static const String baseUrl = 'http://localhost:8080/api/handwriting';
+  // ApiConfig의 설정값을 가져와서 최종 URL을 만듭니다.
+  static final String baseUrl = '${ApiConfig.baseUrl}/handwriting';
 
   // 1. 저장하기 (POST)
   static Future<bool> saveHandwriting(String charName, List<StrokeData> strokes) async {
     final url = Uri.parse('$baseUrl/save');
     
-    // StrokeData 리스트를 Map 리스트로 변환 (toJson 메서드가 있다고 가정)
     final strokesJson = strokes.map((s) => s.toJson()).toList();
 
     final response = await http.post(
@@ -36,8 +37,8 @@ class ApiService {
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
-      // JSON 문자열을 List<dynamic>으로 변환 후 다시 List<StrokeData>로 조립
       final List<dynamic> jsonData = jsonDecode(response.body);
+      // 아까 모델에 추가한 fromJson 팩토리가 여기서 사용됩니다!
       return jsonData.map((json) => StrokeData.fromJson(json)).toList();
     } else {
       print('불러오기 실패: ${response.statusCode}');
