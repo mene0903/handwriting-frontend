@@ -19,11 +19,62 @@ class _InputScreenState extends State<InputScreen> {
   // 나중에 더 키우거나 줄이고 싶으시면 이 숫자만 180, 200 등으로 바꾸시면 됩니다.
   final double canvasSize = 250.0;
 
+  // --- [신규 추가: JSON 확인 팝업 및 로직] ---
+  void _showJsonDialog(String title, String jsonString) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 600,
+            height: 500,
+            child: SingleChildScrollView(
+              child: SelectableText(jsonString),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context), 
+              child: const Text('닫기')
+            )
+          ],
+        );
+      },
+    );
+  }
+
+  void _showRawData() {
+    final strokes = _originalCanvasKey.currentState?.getValidPoints();
+    if (strokes != null && strokes.isNotEmpty) {
+      final request = HandwritingRequest(charName: "ㄱ", strokes: strokes);
+      const encoder = JsonEncoder.withIndent('  ');
+      String rawJson = encoder.convert(request.toJson());
+      _showJsonDialog('원본 JSON 데이터 (정규화 전)', rawJson);
+    } else {
+      _showEmptyWarning();
+    }
+  }
+
+  void _showNormalizedData() {
+    final strokes = _originalCanvasKey.currentState?.getValidPoints();
+    if (strokes != null && strokes.isNotEmpty) {
+      List<StrokeData> normalizedStrokes = NormalizationService.normalizeStrokes(strokes);
+      final request = HandwritingRequest(charName: "ㄱ", strokes: normalizedStrokes);
+      const encoder = JsonEncoder.withIndent('  ');
+      String prettyNormalizedJson = encoder.convert(request.toJson());
+      _showJsonDialog('정규화 JSON 데이터 (0.0 ~ 1.0 범위)', prettyNormalizedJson);
+    } else {
+      _showEmptyWarning();
+    }
+  }
+  // ----------------------------------------
+
   void _saveToServer() async {
     final strokes = _originalCanvasKey.currentState?.getValidPoints();
     if (strokes != null && strokes.isNotEmpty) {
       List<StrokeData> normalizedStrokes = NormalizationService.normalizeStrokes(strokes);
-      bool isSuccess = await ApiService.saveHandwriting("가", normalizedStrokes);
+      bool isSuccess = await ApiService.saveHandwriting("ㄱ", normalizedStrokes);
 
       if (isSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -99,7 +150,7 @@ class _InputScreenState extends State<InputScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('원본 vs 서버 데이터 확실한 비교')),
+      appBar: AppBar(title: const Text('원본 서버 데이터 비교')),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -127,7 +178,29 @@ class _InputScreenState extends State<InputScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 50),
+            const SizedBox(height: 30),
+
+            // --- [신규 추가: JSON 데이터 확인용 버튼들] ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _showRawData,
+                  icon: const Icon(Icons.code),
+                  label: const Text('원본 JSON'),
+                ),
+                const SizedBox(width: 15),
+                OutlinedButton.icon(
+                  onPressed: _showNormalizedData,
+                  icon: const Icon(Icons.analytics_outlined),
+                  label: const Text('정규화 JSON'),
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.blue),
+                ),
+              ],
+            ),
+            const SizedBox(height: 30),
+            // ----------------------------------------
+
             // 하단 제어 버튼들
             Row(
               mainAxisAlignment: MainAxisAlignment.center,

@@ -5,3 +5,4 @@ class ApiConfig {
   static const String serverPort = 'spring port';      // 스프링 포트
   static const String baseUrl = 'http://$serverIp:$serverPort/api';
 }
+
