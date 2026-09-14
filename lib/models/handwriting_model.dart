@@ -46,7 +46,7 @@ class PointData {
     'y': double.parse(y.toStringAsFixed(4)),
     'p': double.parse(pressure.toStringAsFixed(4)),
   };
-
+ 
   // [추가됨] 서버에서 온 JSON을 다시 PointData 객체로 변환
   factory PointData.fromJson(Map<String, dynamic> json) {
     return PointData(

@@ -4,6 +4,8 @@ import 'package:handwriting_front/http/api_service.dart';
 import '../widgets/drawing_canvas.dart';
 import '../models/handwriting_model.dart';
 import '../services/normalization_service.dart';
+import 'bad_writing_test_screen.dart';
+import 'double_jamo_test_screen.dart';
 
 class InputScreen extends StatefulWidget {
   const InputScreen({Key? key}) : super(key: key);
@@ -11,6 +13,8 @@ class InputScreen extends StatefulWidget {
   @override
   State<InputScreen> createState() => _InputScreenState();
 }
+
+
 
 class _InputScreenState extends State<InputScreen> {
   final GlobalKey<DrawingCanvasState> _originalCanvasKey =
@@ -353,6 +357,48 @@ void _loadDoubleConsonant() async {
                   ),
                   child: const Text(
                     'ㄲ 불러오기',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const BadWritingTestScreen(),
+      ),
+    ); 
+  },
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red,
+    minimumSize: const Size(100, 45), 
+  ),
+  child: const Text(
+    '악필 검증 테스트',
+    style: TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DoubleJamoTestScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    minimumSize: const Size(100, 45),
+                  ),
+                  child: const Text(
+                    '쌍자음 합성 테스트',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

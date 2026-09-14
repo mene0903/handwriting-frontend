@@ -17,4 +17,4 @@ class HandwritingApp extends StatelessWidget {
       home: InputScreen(),
     );
   }
-}
+}  

@@ -5,7 +5,16 @@ import '../models/handwriting_model.dart'; // PointData, StrokeData 임포트 (�
 class DrawingCanvas extends StatefulWidget {
   final double size;
 
-  const DrawingCanvas({Key? key, required this.size}) : super(key: key);
+  // 읽기 전용 모드: 프리뷰 캔버스처럼 사용자가 직접 필기하면 안 되는 곳에서
+  // true로 설정하면 터치/펜 입력을 받지 않는다. 기본값 false로 기존 화면(InputScreen,
+  // BadWritingTestScreen)의 동작에는 영향이 없다.
+  final bool readOnly;
+
+  const DrawingCanvas({
+    Key? key,
+    required this.size,
+    this.readOnly = false,
+  }) : super(key: key);
 
   @override
   // InputScreen에서 GlobalKey로 접근해야 하므로 State 클래스는 public(언더바 없음)이어야 합니다.
@@ -100,10 +109,11 @@ class DrawingCanvasState extends State<DrawingCanvas> {
         color: Colors.white,
       ),
       // GestureDetector 대신 Listener를 사용해야 원시 필압(Pressure) 데이터를 손실 없이 받습니다.
+      // readOnly인 경우 콜백을 null로 넘겨 터치 입력을 아예 받지 않는다.
       child: Listener(
-        onPointerDown: _onPointerDown,
-        onPointerMove: _onPointerMove,
-        onPointerUp: _onPointerUp,
+        onPointerDown: widget.readOnly ? null : _onPointerDown,
+        onPointerMove: widget.readOnly ? null : _onPointerMove,
+        onPointerUp: widget.readOnly ? null : _onPointerUp,
         child: CustomPaint(
           painter: DrawingPainter(_strokes, _currentStrokePoints),
           size: Size(widget.size, widget.size),
@@ -166,7 +176,7 @@ class DrawingPainter extends CustomPainter {
           midPointX, midPointY
         );
       }
-      // 마지막 꼬리 부분은 끝점까지 확실하게 이어줍니다.
+      // 마지막 꼬리 부분은 끝점까지 확실하게 이어줍니다. 
       path.lineTo(points.last.x, points.last.y);
     }
 

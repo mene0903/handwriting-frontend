@@ -19,7 +19,7 @@ class NormalizationService {
       }
     }
 
-    double width = (maxX - minX) == 0 ? 1 : (maxX - minX);
+    double width = (maxX - minX) == 0 ? 1 : (maxX - minX); 
     double height = (maxY - minY) == 0 ? 1 : (maxY - minY);
 
     List<Map<String, dynamic>> normalizedStrokes = strokes.map((stroke) {
